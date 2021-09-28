@@ -3,6 +3,7 @@ using CreatioClient.Core.Models.Dto;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
@@ -97,30 +98,35 @@ namespace CreatioClient.Core.Services
             {
                 _wss = new ClientWebSocket();
                 _wss.Options.Cookies = _cookies;
-                _wss.Options.SetRequestHeader("BPMCSRF", _cookies.GetCookies(_configuration.AppUri)["BPMCSRF"].Value);
+                string value = _cookies.GetCookies(_configuration.AppUri).Cast<Cookie>()
+                    .FirstOrDefault(c => c.Name == "BPMCSRF").Value;
+
+                _wss.Options.SetRequestHeader("BPMCSRF", value);
             }
         }
 
         private async Task Connect(CancellationToken ct)
         {
-
-            await _wss.ConnectAsync(SocketUri, CancellationToken.None);
+            await _wss.ConnectAsync(SocketUri, ct);
         }
 
         private async Task Receive(CancellationToken ct)
         {
-            
             while (!ct.IsCancellationRequested && _wss.State == WebSocketState.Open)
             {
                 using (MemoryStream ms = new MemoryStream())
                 {
-                    ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[8192]);
+                    int increment = 128;
+                    byte[] buffer = new byte[increment];
                     WebSocketReceiveResult result = default;
+                    int bytesUsed = 0;
+
                     do
                     {
+                        ArraySegment<byte> bufferSegment = new ArraySegment<byte>(buffer, bytesUsed, increment);
                         try
                         {
-                            result = await _wss.ReceiveAsync(buffer, ct);
+                            result = await _wss.ReceiveAsync(bufferSegment,ct);
                         }
                         catch (WebSocketException ex)
                         {
@@ -129,17 +135,28 @@ namespace CreatioClient.Core.Services
 
                         if(result is object)
                         {
-                            ms.Write(buffer.Array, 0, result.Count);
+                            ms.Write(bufferSegment.Array, bytesUsed, result.Count);
+                            bytesUsed += result.Count;
                         }
+
+                        if (!result.EndOfMessage)
+                        {
+                            Array.Resize(ref buffer, buffer.Length+ increment);
+                        }
+
                     }
                     while (result is object && result is object && !result.EndOfMessage && !ct.IsCancellationRequested);
-
+                    
                     if (result is object && result.MessageType == WebSocketMessageType.Text)
                     {
                         ms.Seek(0, SeekOrigin.Begin);
+                        
                         using (var reader = new StreamReader(ms, Encoding.UTF8))
                         {
-                            string txt = await reader.ReadToEndAsync();
+                            char[] buf = new char[bytesUsed];
+                            await reader.ReadBlockAsync(buf, 0, bytesUsed);
+                            string txt = new string(buf);
+
                             if (!string.IsNullOrEmpty(txt) && !string.IsNullOrWhiteSpace(txt))
                             {
                                 WebSocketMessage obj = JsonSerializer.Deserialize<WebSocketMessage>(txt);
