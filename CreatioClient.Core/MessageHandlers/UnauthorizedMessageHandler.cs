@@ -9,6 +9,7 @@ namespace CreatioClient.Core.MessageHandlers
     internal class UnauthorizedMessageHandler : DelegatingHandler, IDisposable
     {
         private readonly ILogin _login;
+
         internal UnauthorizedMessageHandler(ILogin login)
         {
             _login = login;
@@ -19,23 +20,30 @@ namespace CreatioClient.Core.MessageHandlers
             if (_login.CurrentState == Login.State.Unknown || _login.CurrentState == Login.State.LoggedOut)
             {
                 await _login.Execute();
+                if (_login.CurrentState == Login.State.LoggedIn)
+                {
+                    //Send the request
+                    return await base.SendAsync(request, cancellationToken);
+                }
             }
 
-            //Send the request
-            HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
-            
+
+            var response = await base.SendAsync(request, cancellationToken);
             
             //If request comes back with Unauthorized, RELOGIN
-            if(response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                _login.SetState(Login.State.LoggedOut);
+                _login.SetCurrentLogInState(Login.State.LoggedOut);
                 await _login.Execute();
-                
-                // RESEND the original request
-                return await base.SendAsync(request, cancellationToken);
+
+
+                if (_login.CurrentState == Login.State.LoggedIn)
+                {
+                    // RESEND the original request
+                    response = await base.SendAsync(request, cancellationToken);
+                }
             }
-            return response;
-                                    
+            return response;                   
         }       
     }
 }

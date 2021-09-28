@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CreatioClient.Core.Exceptions;
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -38,10 +39,10 @@ namespace CreatioClient.Core.Services
                 HttpResponseMessage response = await _httpClient.SendAsync(requestData.HttpRequestMessage);
                 return response;
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
                 //TODO: Add Logging
-                throw;
+                throw new CreatioRestRequestException(ex.Message, ex);
             }
         }
         #endregion

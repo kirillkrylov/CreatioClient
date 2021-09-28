@@ -1,10 +1,11 @@
-﻿using CreatioClient.Core.Exceptions;
-using CreatioClient.Core.MessageHandlers;
+﻿using CreatioClient.Core.MessageHandlers;
 using CreatioClient.Core.Models.Domain;
+using CreatioClient.Core.Models.Dto;
 using CreatioClient.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -13,14 +14,18 @@ using ICredentials = CreatioClient.Core.Models.Domain.ICredentials;
 
 namespace CreatioClient.Core
 {
+    /// <summary>
+    /// Main entry point
+    /// </summary>
     public class Client
     {
+        #region Fields and Properties
         private IHost _host;
         private readonly ICredentials _credentials;
         private readonly IConfiguration _configuration;
-
         private readonly object _loginStateLock = new object();
         internal bool LoginState {get; set;}
+        #endregion
 
         #region Constructor
         public Client(string appUrl, string userName, string userPassword, bool UseUntrustedSSL=true, bool isNetCore = false)
@@ -159,7 +164,15 @@ namespace CreatioClient.Core
             Models.Domain.IRestRequest model = new Models.Domain.RestRequest(message, requestTimeout);
             return await restService.Execute(model);
         }
-        
+
+        #endregion
+
+        #region WebSocketMessages
+        public IDisposable SubscribeToWebSocketMessages(IFilteredObserver<WebSocketMessage> observer)
+        {
+            IMessageBroker messageBroker =  _host.Services.GetRequiredService<IMessageBroker>();
+            return messageBroker.Subscribe(observer);
+        }
         #endregion
 
         #region Methods : Not Implemented
@@ -173,6 +186,7 @@ namespace CreatioClient.Core
         }
 
         #endregion
+
         #region Methods Private
 
         internal void SetLoginState(bool state)
@@ -231,6 +245,8 @@ namespace CreatioClient.Core
                 return _handler;
             });
 
+            services.AddSingleton<ConcurrentQueue<WebSocketMessage>>();
+
             services.AddHttpClient<ILogin, Login>((provider, client) =>
             {
                 IConfiguration conf = provider.GetRequiredService<IConfiguration>();
@@ -266,6 +282,9 @@ namespace CreatioClient.Core
                 IConfiguration conf = provider.GetRequiredService<IConfiguration>();
                 return new CsrfMessageHandler(cookies, conf);
             });
+
+            services.AddSingleton<IMessageListener, MessageListener>();
+            services.AddSingleton<IMessageBroker, MessageBroker>();
         }
 
         #endregion

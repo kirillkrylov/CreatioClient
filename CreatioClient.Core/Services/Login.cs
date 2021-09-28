@@ -1,6 +1,8 @@
-﻿using CreatioClient.Core.Models.Domain;
+﻿using CreatioClient.Core.Exceptions;
+using CreatioClient.Core.Models.Domain;
 using CreatioClient.Core.Models.Dto;
 using System;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,14 +11,13 @@ using ICredentials = CreatioClient.Core.Models.Domain.ICredentials;
 namespace CreatioClient.Core.Services
 {
 
-
     internal interface ILogin 
     {
         Login.State CurrentState { get; }
         DateTime LastLogin { get; }
     
         Task<bool> Execute();
-        void SetState(Login.State state);
+        void SetCurrentLogInState(Login.State state);
     }
 
     internal class Login : RestRequestBase, ILogin, IDisposable
@@ -33,7 +34,7 @@ namespace CreatioClient.Core.Services
         private const string _relativeUrl = "ServiceModel/AuthService.svc/Login";
 
         #region Constructor
-        public Login(HttpClient httpClient, ICredentials credentials, IConfiguration configuration): base(httpClient)
+        public Login(HttpClient httpClient, ICredentials credentials, IConfiguration configuration) : base(httpClient)
         {
             _credentials = credentials;
             _configuration = configuration;
@@ -43,6 +44,9 @@ namespace CreatioClient.Core.Services
         public DateTime LastLogin { get; private set; }
         public State CurrentState { get; private set; } = State.Unknown;
 
+
+
+       
         public async Task<bool> Execute()
         {
             var loginRequest = new LoginRequest(_credentials.UserName, _credentials.UserPassword);
@@ -54,19 +58,26 @@ namespace CreatioClient.Core.Services
 
             if(SuccessStatusCodes.IsStatusSuccess(typeof(ILogin), response.StatusCode))
             {
-                var lr = await CreatioSerializer.DeserializeResponse<LoginResponse>(response, SerializedWith.Microsoft);
-
-                if(lr.Code == 0)
+                try
                 {
-                    SetState(State.LoggedIn);
+                    var loginResponse = await CreatioSerializer.DeserializeResponse<LoginResponse>(
+                        response, SerializedWith.Microsoft);
+                    
+                    if(loginResponse.Code == 0)
+                    {
+                        SetCurrentLogInState(State.LoggedIn);
+                    }
+                    return loginResponse.Code == 0;
                 }
-                return lr.Code == 0;
-            }
-                        
+                catch (CreatioSerializationException)
+                {
+                    return false;
+                }
+            }       
             return false;
         }
 
-        public void SetState(State state)
+        public void SetCurrentLogInState(State state)
         {
             lock (_lock)
             {

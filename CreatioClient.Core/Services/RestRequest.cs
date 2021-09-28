@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CreatioClient.Core.Exceptions;
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace CreatioClient.Core.Services
 
     internal class RestRequest : RestRequestBase, IRestRequest, IDisposable
     {
-       #region Constructor
+        #region Constructor
         public RestRequest(HttpClient httpClient) : base(httpClient) { }
         
         #endregion
@@ -34,7 +35,11 @@ namespace CreatioClient.Core.Services
         public async Task<TResult> Execute<TResult>(Models.Domain.IRestRequest requestParam, SerializedWith serializedWith) where TResult: class
         {
             HttpResponseMessage response = await Execute(requestParam);
-            return await CreatioSerializer.DeserializeResponse<TResult>(response, serializedWith);
+            if (response is object)
+            {
+                return await CreatioSerializer.DeserializeResponse<TResult>(response, serializedWith);
+            }
+            else return default;
         }
         #endregion
     }

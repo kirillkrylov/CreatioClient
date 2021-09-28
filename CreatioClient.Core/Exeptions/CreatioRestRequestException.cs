@@ -10,22 +10,27 @@ namespace CreatioClient.Core.Exceptions
         public Type Type {  get; private set; }
         public Stream Stream { get; private set; }
 
-        public CreatioRestRequestException( string content) : base(content)
+        public CreatioRestRequestException(string content, Exception innerException) : base(content, innerException)
         {
             
         }
-        public CreatioRestRequestException(HttpStatusCode statusCode, string content) : this(content)
+
+        public CreatioRestRequestException(string content) : base(content)
+        {
+
+        }
+
+        public CreatioRestRequestException(HttpStatusCode statusCode, string content, Exception innerException) : this(content, innerException)
         {
             StatusCode = statusCode;
         }
-        public CreatioRestRequestException(HttpStatusCode statusCode, Type type, string content) : this(statusCode, content)
+        public CreatioRestRequestException(HttpStatusCode statusCode, Type type, string content, Exception innerException) : this(statusCode, content, innerException)
         {
             Type = type;
         }
-        public CreatioRestRequestException(HttpStatusCode statusCode, Type type, Stream stream, string content) : this(statusCode, type, content)
+        public CreatioRestRequestException(HttpStatusCode statusCode, Type type, Stream stream, string content, Exception innerException) : this(statusCode, type, content, innerException)
         {
             Stream = stream;
         }
     }
-
 }
